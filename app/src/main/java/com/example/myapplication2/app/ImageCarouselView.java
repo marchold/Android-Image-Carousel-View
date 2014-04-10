@@ -17,8 +17,6 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.Scroller;
 
-import org.jetbrains.annotations.NotNull;
-
 import java.util.ArrayList;
 
 /**
@@ -40,14 +38,14 @@ public class ImageCarouselView extends LinearLayout {
      * Determines speed during touch scrolling
      */
     private VelocityTracker mVelocityTracker;
-    private int mMinimumVelocity;
+    private int minimumVelocity;
     private int mMaximumVelocity;
-    private int mFlingDistance;
+    private int flingDistance;
 
     /**
      * Position of the last motion event.
      */
-    private float mLastMotionX;
+    private float lastMotionX;
     private float mLastMotionY;
     private float mInitialMotionX;
 
@@ -59,16 +57,18 @@ public class ImageCarouselView extends LinearLayout {
     private int mActivePointerId = INVALID_POINTER;
     private static final int INVALID_POINTER = -1;
 
-
     private boolean mIsBeingDragged; //True while the view is being dragged
-
-
-
-
-
 
     private int carouselHeight;
     private Carousel carousel;
+
+    public void setPageChangeListener(OnPageChangeListener pageChangeListener) {
+        this.pageChangeListener = pageChangeListener;
+    }
+    interface OnPageChangeListener{
+        public void onNewPage(int newPage);
+    }
+    private OnPageChangeListener pageChangeListener;
 
 
     @SuppressLint("NewApi")
@@ -115,18 +115,12 @@ public class ImageCarouselView extends LinearLayout {
         }
     }
 
-    @Override
-    public void onMeasure(int w,int h){
-        super.onMeasure(w,h);
-
-    }
-
     private void init(Context context){
 
         final ViewConfiguration configuration = ViewConfiguration.get(context);
         final float density = context.getResources().getDisplayMetrics().density;
-        mMinimumVelocity = (int) (MIN_FLING_VELOCITY * density);
-        mFlingDistance = (int) (MIN_DISTANCE_FOR_FLING * density);
+        minimumVelocity = (int) (MIN_FLING_VELOCITY * density);
+        flingDistance = (int) (MIN_DISTANCE_FOR_FLING * density);
 
         mMaximumVelocity = configuration.getScaledMaximumFlingVelocity();
 
@@ -141,7 +135,7 @@ public class ImageCarouselView extends LinearLayout {
 
 
     @Override
-    public boolean onTouchEvent(@NotNull MotionEvent ev) {
+    public boolean onTouchEvent(MotionEvent ev) {
 
         if (ev.getAction() == MotionEvent.ACTION_DOWN && ev.getEdgeFlags() != 0) {
             // Don't handle edge touches immediately -- they may actually belong to one of our
@@ -162,9 +156,8 @@ public class ImageCarouselView extends LinearLayout {
             case MotionEvent.ACTION_DOWN: {
                 carousel.scroller.abortAnimation();
 
-
                 // Remember where the motion event started
-                mLastMotionX = mInitialMotionX = ev.getX();
+                lastMotionX = mInitialMotionX = ev.getX();
                 mActivePointerId = MotionEventCompat.getPointerId(ev, 0);
                 break;
             }
@@ -172,16 +165,14 @@ public class ImageCarouselView extends LinearLayout {
                 if (!mIsBeingDragged) {
                     final int pointerIndex = MotionEventCompat.findPointerIndex(ev, mActivePointerId);
                     final float x = MotionEventCompat.getX(ev, pointerIndex);
-                    final float xDiff = Math.abs(x - mLastMotionX);
+                    final float xDiff = Math.abs(x - lastMotionX);
                     final float y = MotionEventCompat.getY(ev, pointerIndex);
                     final float yDiff = Math.abs(y - mLastMotionY);
-                    //if (DEBUG) Log.v(TAG, "Moved x to " + x + "," + y + " diff=" + xDiff + "," + yDiff);
-                    if (xDiff > yDiff) {
-                        //if (DEBUG) Log.v(TAG, "Starting drag!");
-                        mIsBeingDragged = true;
-                        mLastMotionX = x - mInitialMotionX > 0 ? mInitialMotionX  : mInitialMotionX ;
-                        mLastMotionY = y;
 
+                    if (xDiff > yDiff) {
+                        mIsBeingDragged = true;
+                        lastMotionX = x - mInitialMotionX > 0 ? mInitialMotionX  : mInitialMotionX ;
+                        mLastMotionY = y;
                     }
                 }
                 // Not else! Note that mIsBeingDragged can be set above.
@@ -198,21 +189,13 @@ public class ImageCarouselView extends LinearLayout {
                     final VelocityTracker velocityTracker = mVelocityTracker;
                     velocityTracker.computeCurrentVelocity(1000, mMaximumVelocity);
                     int initialVelocity = (int) VelocityTrackerCompat.getXVelocity(velocityTracker, mActivePointerId);
-
-                    final int scrollX = carousel.getScrollX();
-
-                    float curPageFlt = (float)scrollX/(float)itemWidth;
+                    float curPageFlt = (float)carousel.getScrollX()/(float)itemWidth;
                     final int currentPage = (int)curPageFlt;
                     final float pageOffset = (curPageFlt-currentPage);
-
-                    final int activePointerIndex =  MotionEventCompat.findPointerIndex(ev, mActivePointerId);
-                    final float x = MotionEventCompat.getX(ev, activePointerIndex);
+                    final float x = MotionEventCompat.getX(ev, MotionEventCompat.findPointerIndex(ev, mActivePointerId));
                     final int totalDelta = (int) (x - mInitialMotionX);
-
-
                     int nextPage = determineTargetPage(currentPage, pageOffset, initialVelocity, totalDelta);
                     carousel.doScroll((int) (itemWidth * nextPage));
-
                     mActivePointerId = INVALID_POINTER;
                     endDrag();
                 }
@@ -227,12 +210,12 @@ public class ImageCarouselView extends LinearLayout {
             case MotionEventCompat.ACTION_POINTER_DOWN: {
                 final int index = MotionEventCompat.getActionIndex(ev);
                 final float x = MotionEventCompat.getX(ev, index);
-                mLastMotionX = x;
+                lastMotionX = x;
                 mActivePointerId = MotionEventCompat.getPointerId(ev, index);
                 break;
             }
             case MotionEventCompat.ACTION_POINTER_UP:
-                mLastMotionX = MotionEventCompat.getX(ev,
+                lastMotionX = MotionEventCompat.getX(ev,
                         MotionEventCompat.findPointerIndex(ev, mActivePointerId));
                 break;
         }
@@ -245,34 +228,36 @@ public class ImageCarouselView extends LinearLayout {
     private int determineTargetPage(int currentPage, float pageOffset, int velocity, int deltaX) {
         int targetPage;
 
+        //First check if there was enough velocity and distance that we need to fake some physics
+        //and finish the scroll
+        if (Math.abs(deltaX) > flingDistance && Math.abs(velocity) > minimumVelocity) {
 
-
-        if (Math.abs(deltaX) > mFlingDistance && Math.abs(velocity) > mMinimumVelocity) {
-
+            //If the pageOffset<0 that means that we are scrolling in to the negative direction.
+            //that is to the left of the initial position.
             if (pageOffset<0) {
                 targetPage = velocity > 0 ? currentPage-1 : currentPage;
             }else {
                 targetPage = velocity > 0 ? currentPage : currentPage + 1;
             }
 
-
         } else {
 
-            float truncator = currentPage >= mCurItem ? 0.4f : 0.6f;
+            //60/40 ratio for determining if we went to the next page
+            float truncation = currentPage >= mCurItem ? 0.4f : 0.6f;
 
-            if (pageOffset<0) truncator=-truncator;
+            //If we are scrolling in to negative directions the truncation is backward
+            if (pageOffset<0) truncation=-truncation;
 
-            targetPage = (int) (currentPage + pageOffset + truncator);
+            //These will get added up to a fraction that is truncated (i.e 2.8 = 2)
+            targetPage = (int) (currentPage + pageOffset + truncation);
 
         }
 
         return targetPage;
     }
 
-
     private void endDrag() {
         mIsBeingDragged = false;
-
 
         if (mVelocityTracker != null) {
             mVelocityTracker.recycle();
@@ -283,17 +268,13 @@ public class ImageCarouselView extends LinearLayout {
     private boolean performDrag(float x) {
         boolean needsInvalidate = false;
 
-        final float deltaX = mLastMotionX - x;
-        mLastMotionX = x;
+        final float deltaX = lastMotionX - x;
+        lastMotionX = x;
 
         float oldScrollX = carousel.getScrollX();
         float scrollX = oldScrollX + deltaX;
-        final int width = getWidth();//getClientWidth();
 
-        boolean leftAbsolute = true;
-        boolean rightAbsolute = true;
-
-        mLastMotionX += scrollX - (int) scrollX;
+        lastMotionX += scrollX - (int) scrollX;
         carousel.scrollTo((int) scrollX, getScrollY());
 
         return true;
@@ -306,7 +287,24 @@ public class ImageCarouselView extends LinearLayout {
     public class Carousel extends ViewGroup {
         public Scroller scroller;
         private ArrayList<Integer> imageResources;
+
         private int oldItem=0;
+
+        //These views get cycled through each other
+        private ImageView left;
+        private ImageView middle;
+        private ImageView right;
+
+        private int currentLeftResource;
+        private int currentMiddleResource;
+        private int currentRightResource;
+
+
+        //We have 3 views that display in a window windowStart and windowEnd describe where the 3 images are
+        int windowStart;
+        int windowEnd;
+
+
         public Carousel(Context context) {
             super(context);
 
@@ -316,10 +314,15 @@ public class ImageCarouselView extends LinearLayout {
             middle = new ImageView(getContext());
             right = new ImageView(getContext());
 
-            leftOffset   = -itemWidth;
-            middleOffset = 0;
-            rightOffset  = itemWidth;
+            left.setScaleType(ImageView.ScaleType.FIT_XY);
+            middle.setScaleType(ImageView.ScaleType.FIT_XY);
+            right.setScaleType(ImageView.ScaleType.FIT_XY);
+
+            windowStart = 0;
+            windowEnd = itemWidth *3;
         }
+
+
         public void setImageResources(ArrayList<Integer> imageResources){
             this.imageResources = imageResources;
         }
@@ -333,127 +336,138 @@ public class ImageCarouselView extends LinearLayout {
 
         @Override
         protected void onLayout(boolean changed, int l, int t, int r, int b) {
-
+            //this one is abstract in ViewGroup but in this case we don't need it because
+            //there are always the same 3 views
         }
-
-
 
         @Override
         protected void dispatchDraw(Canvas canvas) {
-
-
-            boolean more = false;
             final long drawingTime = getDrawingTime();
 
+            //Each time we need to draw our children we recalculate which child goes where
+            //and what gets displayed in it
             int width = itemWidth;
 
+            //Determine the current visible page based on the scroll position
             int x = scroller.getCurrX();
             int currentItem = x/width;
 
-
+            //Determine how far ahead or behind the current page is. In most cases it will be -1 or 1
+            //but it can be a bigger number if the user somehow scrolled a long way
             int itemDiff = oldItem-currentItem;
-
+            boolean pageChanged = false;
+            //This means we have moved one frame to the left (showing a new frame to the right)
             while (itemDiff < 0) {
 
-                Log.i("DRAG", "Moving Left :: Dispatch Draw currentItem=" + currentItem);
-
-                //This means we have moved one frame to the left (showing a new frame to the right)
+                //Move our visible window one page over
                 windowStart += width;
                 windowEnd += width;
 
-
-
+                //Rotate the views such that the left view goes on the right side
                 ImageView tmp = left;
                 left = middle;
                 middle = right;
                 right = tmp;
 
                 itemDiff++;
-
-
+                pageChanged=true;
             }
-            //if (oldItem > currentItem){
+
+            //This means we have moved one frame to the right (showing a new frame to the left)
             while (itemDiff > 0) {
 
-                Log.i("DRAG","Moving Right ::Dispatch Draw currentItem="+currentItem);
-
-                //We moved 1 frame to the right
+                //Move our visible window one page over
                 windowStart -= width;
                 windowEnd -= width;
 
-
-
+                //Rotate the views such that the right view goes on the left side
                 ImageView tmp = right;
                 right = middle;
                 middle = left;
                 left = tmp;
 
                 itemDiff--;
+                pageChanged=true;
             }
 
+            //Save the page location for next time
             oldItem = currentItem;
 
 
+            //Determine what image resource goes in the left view
             int count = imageResources.size();
+            int imageItem = (currentItem-1) % count;
 
-            int imageItem = currentItem % count;
+            //I don't see why I need this the currentItem % count should not be negative
             if (imageItem<0)imageItem+=count;
 
-            Log.i("CAR","imageItem="+imageItem+"    currentItem="+currentItem+"    count="+count);
-
+            //Use our window position to determine
             int l = windowStart-width;
             int t = 0;
             int r = windowStart;
-            int b = 400;
-            Log.i("DRAG","WindowStart ="+l);
-            left.setImageResource(imageResources.get(imageItem));
+            int b = carouselHeight;
+
+            //Check if we need to update the left image
+            int resource = imageResources.get(imageItem);
+            if (currentLeftResource != resource)
+            {
+                currentLeftResource = resource;
+                left.setImageResource(currentLeftResource);
+            }
+            //Draw the view off screen to the left
             left.layout(l,t,r,b);
-
-
             drawChild(canvas, left, drawingTime);
+
+            //Move to the middle part
             l+=width;
             r+=width;
+
+            //Determine what image resource goes in the center view
+            imageItem = (currentItem) % count;
+            if (imageItem<0)imageItem+=count;
+
+            //Check if we need to update the center image
+            resource = imageResources.get(imageItem);
+            if (currentMiddleResource != resource)
+            {
+                currentMiddleResource = resource;
+                middle.setImageResource(currentMiddleResource);
+
+                //If we update the middle view then we should let the listener know
+                if (pageChanged && pageChangeListener!=null){
+                    pageChangeListener.onNewPage(imageItem);
+                }
+            }
+            //Draw the view centered
+            middle.layout(l,t,r,b);
+            drawChild(canvas, middle, drawingTime);
+
+            //Move to the right part
+            l+=width;
+            r+=width;
+
+            //Determine what image resource goes in the right view
             imageItem = (currentItem+1) % count;
             if (imageItem<0)imageItem+=count;
 
-            middle.setImageResource(imageResources.get(imageItem));
-            middle.layout(l,t,r,b);
-            drawChild(canvas, middle, drawingTime);
-            l+=width;
-            r+=width;
+            //Check if we need to update the right image
+            resource = imageResources.get(imageItem);
+            if (currentRightResource != resource)
+            {
+                currentRightResource = resource;
+                right.setImageResource(currentRightResource);
+            }
+
+            //Draw the view off to the right
             right.layout(l, t, r, b);
-            imageItem = (currentItem+2) % count;
-            if (imageItem<0)imageItem+=count;
-
-            right.setImageResource(imageResources.get(imageItem));
             drawChild(canvas,right,drawingTime);
-
-
         }
-
-
-
-
-        ImageView left;
-        ImageView middle;
-        ImageView right;
-
-        int leftOffset = 0;
-        int middleOffset = 0;
-        int rightOffset = 0;
-
-        int windowStart = 0;
-        int windowEnd = itemWidth *3;
-
 
 
         public void doScroll(int x){
             scroller.forceFinished(true);
             scroller.abortAnimation();
-
             scroller.startScroll(getScrollX(), 0, x - getScrollX(), 0);
-
-
             ViewCompat.postInvalidateOnAnimation(this);
         }
 
@@ -474,9 +488,6 @@ public class ImageCarouselView extends LinearLayout {
                 ViewCompat.postInvalidateOnAnimation(this);
                 return;
             }
-
         }
-
-
     }
 }
