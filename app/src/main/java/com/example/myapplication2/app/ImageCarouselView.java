@@ -11,13 +11,12 @@ import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
+import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.Scroller;
-
-import java.util.ArrayList;
 
 /**
  * Used to create an image carousel with an area that does not scroll that also has touch handlers
@@ -62,6 +61,10 @@ public class ImageCarouselView extends LinearLayout {
     private int carouselHeight;
     private Carousel carousel;
 
+    /**
+     * Optional sets a page change listener. Useful to update content after each page change
+     * @param pageChangeListener
+     */
     public void setPageChangeListener(OnPageChangeListener pageChangeListener) {
         this.pageChangeListener = pageChangeListener;
     }
@@ -69,6 +72,40 @@ public class ImageCarouselView extends LinearLayout {
         public void onNewPage(int newPage);
     }
     private OnPageChangeListener pageChangeListener;
+
+    /**
+     * Required sets a factory to create the views and set there value.
+     * @param carouselFactory
+     */
+    public void setCarouselFactory(CarouselFactory carouselFactory) {
+        this.carouselFactory = carouselFactory;
+    }
+    interface CarouselFactory {
+        View generateView();
+        void setViewContent(View view, int page);
+        int getCount();
+    }
+    private CarouselFactory carouselFactory = new CarouselFactory(){
+        int[] array = new int[]{R.drawable.img1,R.drawable.img2,R.drawable.img3,R.drawable.img4,R.drawable.img5};
+
+        @Override
+        public View generateView() {
+            ImageView imageView = new ImageView(getContext());
+            imageView.setScaleType(ImageView.ScaleType.FIT_XY);
+            return imageView;
+        }
+
+        @Override
+        public void setViewContent(View view, int page) {
+            ImageView imageView = (ImageView)view;
+            imageView.setImageResource(array[page]);
+        }
+
+        @Override
+        public int getCount(){
+            return array.length;
+        }
+    };
 
 
     @SuppressLint("NewApi")
@@ -128,8 +165,7 @@ public class ImageCarouselView extends LinearLayout {
 
         LinearLayout.LayoutParams lp = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,carouselHeight);
         carousel.setLayoutParams(lp);
-        addView(carousel,0);
-        carousel.setImageResources(new int[]{R.drawable.img1,R.drawable.img2,R.drawable.img3,R.drawable.img4,R.drawable.img5});
+        addView(carousel, 0);
 
     }
 
@@ -286,18 +322,19 @@ public class ImageCarouselView extends LinearLayout {
      */
     public class Carousel extends ViewGroup {
         public Scroller scroller;
-        private ArrayList<Integer> imageResources;
+
 
         private int oldItem=0;
 
         //These views get cycled through each other
-        private ImageView left;
-        private ImageView middle;
-        private ImageView right;
+        private View left;
+        private View middle;
+        private View right;
 
-        private int currentLeftResource;
-        private int currentMiddleResource;
-        private int currentRightResource;
+        //Initialize to values that are not real so we don't start on the current page
+        private int currentLeftPage=-100;
+        private int currentMiddlePage=-100;
+        private int currentRightPage=-100;
 
 
         //We have 3 views that display in a window windowStart and windowEnd describe where the 3 images are
@@ -310,28 +347,12 @@ public class ImageCarouselView extends LinearLayout {
 
             scroller = new Scroller(getContext());
 
-            left = new ImageView(getContext());
-            middle = new ImageView(getContext());
-            right = new ImageView(getContext());
-
-            left.setScaleType(ImageView.ScaleType.FIT_XY);
-            middle.setScaleType(ImageView.ScaleType.FIT_XY);
-            right.setScaleType(ImageView.ScaleType.FIT_XY);
+            left = carouselFactory.generateView();
+            middle = carouselFactory.generateView();
+            right = carouselFactory.generateView();
 
             windowStart = 0;
             windowEnd = itemWidth *3;
-        }
-
-
-        public void setImageResources(ArrayList<Integer> imageResources){
-            this.imageResources = imageResources;
-        }
-
-        public void setImageResources(int[] imageResources){
-            this.imageResources = new ArrayList<Integer>(imageResources.length);
-            for (int imageResource : imageResources){
-                this.imageResources.add(imageResource);
-            }
         }
 
         @Override
@@ -364,7 +385,7 @@ public class ImageCarouselView extends LinearLayout {
                 windowEnd += width;
 
                 //Rotate the views such that the left view goes on the right side
-                ImageView tmp = left;
+                View tmp = left;
                 left = middle;
                 middle = right;
                 right = tmp;
@@ -381,7 +402,7 @@ public class ImageCarouselView extends LinearLayout {
                 windowEnd -= width;
 
                 //Rotate the views such that the right view goes on the left side
-                ImageView tmp = right;
+                View tmp = right;
                 right = middle;
                 middle = left;
                 left = tmp;
@@ -395,7 +416,7 @@ public class ImageCarouselView extends LinearLayout {
 
 
             //Determine what image resource goes in the left view
-            int count = imageResources.size();
+            int count = carouselFactory.getCount();
             int imageItem = (currentItem-1) % count;
 
             //I don't see why I need this the currentItem % count should not be negative
@@ -408,11 +429,10 @@ public class ImageCarouselView extends LinearLayout {
             int b = carouselHeight;
 
             //Check if we need to update the left image
-            int resource = imageResources.get(imageItem);
-            if (currentLeftResource != resource)
+            if (currentLeftPage != imageItem)
             {
-                currentLeftResource = resource;
-                left.setImageResource(currentLeftResource);
+                currentLeftPage = imageItem;
+                carouselFactory.setViewContent(left, currentLeftPage);
             }
             //Draw the view off screen to the left
             left.layout(l,t,r,b);
@@ -427,11 +447,10 @@ public class ImageCarouselView extends LinearLayout {
             if (imageItem<0)imageItem+=count;
 
             //Check if we need to update the center image
-            resource = imageResources.get(imageItem);
-            if (currentMiddleResource != resource)
+            if (currentMiddlePage != imageItem)
             {
-                currentMiddleResource = resource;
-                middle.setImageResource(currentMiddleResource);
+                currentMiddlePage = imageItem;
+                carouselFactory.setViewContent(middle,currentMiddlePage);
 
                 //If we update the middle view then we should let the listener know
                 if (pageChanged && pageChangeListener!=null){
@@ -451,11 +470,10 @@ public class ImageCarouselView extends LinearLayout {
             if (imageItem<0)imageItem+=count;
 
             //Check if we need to update the right image
-            resource = imageResources.get(imageItem);
-            if (currentRightResource != resource)
+            if (currentRightPage != imageItem)
             {
-                currentRightResource = resource;
-                right.setImageResource(currentRightResource);
+                currentRightPage = imageItem;
+                carouselFactory.setViewContent(right,currentRightPage);
             }
 
             //Draw the view off to the right
