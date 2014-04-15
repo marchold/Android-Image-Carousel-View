@@ -56,7 +56,7 @@ public class ImageCarouselView extends LinearLayout {
     private int mActivePointerId = INVALID_POINTER;
     private static final int INVALID_POINTER = -1;
 
-    private boolean mIsBeingDragged; //True while the view is being dragged
+    private boolean isBeingDragged; //True while the view is being dragged
 
     private int carouselHeight;
     private Carousel carousel;
@@ -170,6 +170,19 @@ public class ImageCarouselView extends LinearLayout {
     }
 
 
+    /**
+     * We want to make sure the carousel works well in a scroll view. So we ask the parent to
+     * not intercept if its being dragged at the moment
+     * @param ev
+     * @return
+     */
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        boolean retVal = super.dispatchTouchEvent(ev);
+        getParent().requestDisallowInterceptTouchEvent(isBeingDragged);
+        return retVal;
+    }
+
     @Override
     public boolean onTouchEvent(MotionEvent ev) {
 
@@ -198,30 +211,45 @@ public class ImageCarouselView extends LinearLayout {
                 break;
             }
             case MotionEvent.ACTION_MOVE:
-                if (!mIsBeingDragged) {
-                    final int pointerIndex = MotionEventCompat.findPointerIndex(ev, mActivePointerId);
-                    final float x = MotionEventCompat.getX(ev, pointerIndex);
+                if (!isBeingDragged) {
+                    if (mActivePointerId==INVALID_POINTER){
+                        mActivePointerId = MotionEventCompat.getPointerId(ev, 0);
+                    }
+                    int pointerIndex = MotionEventCompat.findPointerIndex(ev, mActivePointerId);
+                    float x;
+                    try {
+                        x = MotionEventCompat.getX(ev, pointerIndex);
+                    } catch (IllegalArgumentException e){
+                        pointerIndex = MotionEventCompat.getPointerId(ev, 0);
+                        x = MotionEventCompat.getX(ev, pointerIndex);
+                    }
                     final float xDiff = Math.abs(x - lastMotionX);
                     final float y = MotionEventCompat.getY(ev, pointerIndex);
                     final float yDiff = Math.abs(y - mLastMotionY);
 
                     if (xDiff > yDiff) {
-                        mIsBeingDragged = true;
+                        isBeingDragged = true;
                         lastMotionX = x - mInitialMotionX > 0 ? mInitialMotionX  : mInitialMotionX ;
                         mLastMotionY = y;
                     }
                 }
-                // Not else! Note that mIsBeingDragged can be set above.
-                if (mIsBeingDragged) {
+                // Not else! Note that isBeingDragged can be set above.
+                if (isBeingDragged) {
                     // Scroll to follow the motion event
                     final int activePointerIndex = MotionEventCompat.findPointerIndex(ev, mActivePointerId);
-                    final float x = MotionEventCompat.getX(ev, activePointerIndex);
+                    float x;
+                    try {
+                        x = MotionEventCompat.getX(ev, activePointerIndex);
+                    } catch (IllegalArgumentException e){
+                        mActivePointerId = MotionEventCompat.getPointerId(ev, 0);
+                        x = MotionEventCompat.getX(ev, activePointerIndex);
+                    }
                     performDrag(x);
                     needsInvalidate=true;
                 }
                 break;
             case MotionEvent.ACTION_UP:
-                if (mIsBeingDragged) {
+                if (isBeingDragged) {
                     final VelocityTracker velocityTracker = mVelocityTracker;
                     velocityTracker.computeCurrentVelocity(1000, mMaximumVelocity);
                     int initialVelocity = (int) VelocityTrackerCompat.getXVelocity(velocityTracker, mActivePointerId);
@@ -237,7 +265,7 @@ public class ImageCarouselView extends LinearLayout {
                 }
                 break;
             case MotionEvent.ACTION_CANCEL:
-                if (mIsBeingDragged) {
+                if (isBeingDragged) {
                     carousel.doScroll((int) (itemWidth * mCurItem));
                     mActivePointerId = INVALID_POINTER;
                     endDrag();
@@ -293,7 +321,7 @@ public class ImageCarouselView extends LinearLayout {
     }
 
     private void endDrag() {
-        mIsBeingDragged = false;
+        isBeingDragged = false;
 
         if (mVelocityTracker != null) {
             mVelocityTracker.recycle();
@@ -350,6 +378,11 @@ public class ImageCarouselView extends LinearLayout {
             left = carouselFactory.generateView();
             middle = carouselFactory.generateView();
             right = carouselFactory.generateView();
+
+            //We don't use these as subviews in the typical way but we add them anyhow so android knows we have children
+            addView(left);
+            addView(middle);
+            addView(right);
 
             windowStart = 0;
             windowEnd = itemWidth *3;
